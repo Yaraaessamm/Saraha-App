@@ -1,7 +1,7 @@
 import express from 'express';
-import { authMiddleware } from "./common/middleware/auth.service.js";
-import { authRouter, userOperationRouter } from './modules/userModule/user.controller.js';
-import { connectionDB } from "./DB/connectionDB.js";
+import { authMiddleware } from "./common/middleware/auth.js";
+import { authRouter, userOperationRouter } from './modules/users/user.controller.js';
+import connectionDB from './DB/connectionDB.js';
 import cors from "cors"
 const app = express()
 const port = 3000

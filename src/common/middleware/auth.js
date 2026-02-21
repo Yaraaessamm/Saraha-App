@@ -1,8 +1,8 @@
 import { VerifyToken } from "../utils/token.service.js";
-import * as db_service from "../../DB/db.service.js";
+import * as db_service from "../../DB/DB.service.js";
 import userModel from "../../DB/models/user.model.js";
 
-export const authentication = async (req, res, next) => {
+export const authMiddleware = async (req, res, next) => {
   const { authorization } = req.headers;
   if (!authorization) {
     throw new Error("Token not exist");

@@ -4,7 +4,7 @@ import {
   decrypt,
   encrypt,
 } from "../../common/utils/security/encrypt.security.js";
-import { successResponse } from "../../common/success.response.js";
+import { successResponse } from "../../common/utils/success.response.js";
 import jwt from "jsonwebtoken";
 import { compare, hash } from "../../common/utils/security/hash.security.js";
 import { OAuth2Client } from "google-auth-library";
