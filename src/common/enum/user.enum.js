@@ -1,9 +1,12 @@
-export const GenderEnum = {
-  male: "male",
-  female: "female"
+export const genderEnum = {
+    male:"male",
+    female:"female",
 }
-
-export const ProviderEnum = {
-  system: "system",
-  google: "google"
+export const providerEnum = {
+    google:"google",
+    system:"system",
+}
+export const roleEnum = {
+    admin:"admin",
+    user:"user",
 }

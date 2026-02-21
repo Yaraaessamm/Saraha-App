@@ -1,21 +1,30 @@
-import express from "express";
-import checkConnectionDB from "./DB/connectionDB.js";
-import userRouter from "./modules/users/user.controller.js";
-const app = express();
-const port = 3000;
+import express from 'express';
+import { authMiddleware } from "./common/middleware/auth.service.js";
+import { authRouter, userOperationRouter } from './modules/userModule/user.controller.js';
+import { connectionDB } from "./DB/connectionDB.js";
+import cors from "cors"
+const app = express()
+const port = 3000
 
-const bootstrap = () => {
-  app.use(express.json());
-  app.get("/", (req, res) => res.send("Welcome In Sticky Note!"));
-  checkConnectionDB();
-  app.use('/users', userRouter);
-  app.use("{/*demo}", (req, res, next) => {
-    throw new Error(`Url ${req.originalUrl} Not Found!`, { cause: 404 });
+export const bootStrap = () =>{
+app.use(cors(),express.json());
+app.get("/", (req, res) => res.send("Hello World!"));
+
+connectionDB();
+
+app.use("/auth",authRouter);
+app.use("/user", authMiddleware,userOperationRouter);
+
+
+
+app.use("/{*demo}", (req, res) => {
+  res.send("Router not found");
+});
+
+  app.use((err, req, res, next) => {
+    res
+      .status(err.cause || 500)
+      .json({ message: err.message, stack: err.stack });
   });
-  app.use((err, req, res, next) =>
-    res.status(err.cause || 500).json({ message: err.message, stack: err.stack }),
-  );
-  app.listen(port, () => console.log(`Server on port ${port}!`));
-};
-
-export default bootstrap;
+app.listen(port, () => console.log(`Example app listening on port ${port}!`));
+}

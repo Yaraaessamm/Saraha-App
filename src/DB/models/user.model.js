@@ -1,66 +1,78 @@
 import mongoose from "mongoose";
-import { GenderEnum, ProviderEnum } from "../../common/enum/user.enum.js";
-
-const userSchema = new mongoose.Schema(
-  {
-    firstName: {
-      type: String,
-      require: true,
-      minLength: 3,
-      maxLength: 15,
-      trim: true,
+import { genderEnum, providerEnum } from "../../common/enum/enum.js";
+const userSchema = new mongoose.Schema({
+  fristName: {
+    type: String,
+    required: true,
+    minLength: 3,
+    maxLength: 20,
+    trim:true
     },
     lastName: {
-      type: String,
-      require: true,
-      minLength: 3,
-      maxLength: 15,
-      trim: true,
-    },
+    type: String,
+    required: true,
+    minLength: 3,
+    maxLength: 20,
+    trim:true
+  },
     email: {
-      type: String,
-      require: true,
-      unique: true,
-      trim: true,
-    },
+    type: String,
+    required: true,
+    unique: true,
+    trim:true,
+    
+  },
     password: {
-      type: String,
-      require: true,
-      trim: true,
-      minLength: 6,
+    type: String,
+    required: function () {
+      return this.provider === providerEnum.system ? true : false
     },
-    age: Number,
-    gender: {
-      type: String,
-      enum: Object.values(GenderEnum),
-      default: GenderEnum.male,
-    },
-    profilePicture: String,
-    confirmed: Boolean,
-    provider: {
-      type: String,
-      enum: Object.values(ProviderEnum),
-      default: ProviderEnum.system,
-    },
-    phone: String
+    minLength: 6,
+    trim:true
   },
-  {
-    timestamps: true,
-    strictQuery: true,
-    toJSON: { virtuals: true },
+  age:{
+    type:Number,
   },
-);
+  phone:{
+    type:String,
+  },
+  gender:{
+    type:String,
+    enum:Object.values(genderEnum),
+    default:genderEnum.male
+  },
+  role:{
+    type:String,
+    enum:["admin","user"],
+    default:"user"
+  },
+  provider:{
+    type:String,
+    enum:Object.values(providerEnum),
+    default:providerEnum.system
+  },
+  confirm:{
+    type:Boolean,
+  },
+  profilePicture:{
+    type:String,
+  }
+},
+{
+  timestamps:true,
+  strictQuery:true,
+  toJSON:true,
+  toObject:true
+});
 
-userSchema
-  .virtual("userName")
-  .get(function () {
-    return this.firstName + " " + this.lastName;
-  })
-  .set(function (val) {
-    const [firstName, lastName] = val.split(" ");
-    this.set({ firstName, lastName });
-  });
+userSchema.virtual("fullName").get(function () {
+  return `${this.fristName} ${this.lastName}`;
+}).set(function (value) {
+  const [fristName, lastName] = value.split(" ");
+  this.fristName = fristName;
+  this.lastName = lastName;
+});
 
-const userModel = mongoose.models.user || mongoose.model("user", userSchema);
+const userModel =mongoose.models.user || mongoose.model("user", userSchema);
 
 export default userModel;
