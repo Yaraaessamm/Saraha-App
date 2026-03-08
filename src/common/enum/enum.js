@@ -10,3 +10,7 @@ export const roleEnum = {
     admin:"admin",
     user:"user",
 }
+export const fileTypeEnum = {
+    image:["image/jpeg","image/png","image/gif"],
+    pdf:["application/pdf","application/x-pdf"],
+}

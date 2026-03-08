@@ -1,12 +1,13 @@
 import mongoose from "mongoose";
-
-const checkConnectionDB = async () => {
-  await mongoose
-    .connect("mongodb://localhost:27017/saraha_app", {
-      serverSelectionTimeoutMS: 1000,
+import { db_uri } from "../config/env.services.js";
+export const connectionDB = async () => {
+  await mongoose.connect(db_uri , {
+      serverSelectionTimeoutMS: 3000,
     })
-    .then(() => console.log("DB connected successfully"))
-    .catch((err) => console.log("DB Connected Failed", err));
+    .then(() => {
+      console.log("Data base connected successfully");
+    })
+    .catch((err) => {
+      console.log("Data base connection failed", err);
+    });
 };
-
-export default checkConnectionDB;
