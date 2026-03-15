@@ -4,6 +4,7 @@ import { authRouter, userOperationRouter } from './modules/userModule/user.contr
 import { connectionDB } from "./DB/connectionDB.js";
 import cors from "cors"
 import { port } from './config/env.services.js';
+import { connectRedis } from './DB/redis/redis.DB.js';
 const app = express()
 
 
@@ -12,6 +13,7 @@ app.use(cors(),express.json());
 app.get("/", (req, res) => res.send("Hello World!"));
 
 connectionDB();
+connectRedis();
 
 app.use("/auth",authRouter);
 app.use("/user",userOperationRouter);

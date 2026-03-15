@@ -1,6 +1,6 @@
 export const authorization = (roles = []) => {
   return async (req, res, next) => {    
-      const user = req.user;
+      const user = req.decoded;
       console.log(user);
       
       if (!roles.includes(user.role)) {

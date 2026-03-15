@@ -2,6 +2,7 @@ import e, { Router } from "express";
 import {
   getProfile,
   login,
+  logout,
   refreshToken,
   shareProfile,
 
@@ -39,3 +40,4 @@ userOperationRouter.get("/profile",authMiddleware, authorization(roleEnum.user),
 userOperationRouter.get("/shareProfile/:id", shareProfile);
 userOperationRouter.put("/updateProfile/:id",authMiddleware, authorization(roleEnum.user), updateProfile);
 userOperationRouter.put("/updatePassword/:id",authMiddleware, authorization(roleEnum.user), updatePassword);
+userOperationRouter.post("/logout",authMiddleware, authorization(roleEnum.user),logout);

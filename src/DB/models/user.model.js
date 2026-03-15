@@ -64,6 +64,7 @@ const userSchema = new mongoose.Schema(
         required: true,
       },
     },
+    changeCradentials: Date,
     coverPicture: [
       {
         secure_url: {

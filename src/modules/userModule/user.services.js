@@ -11,7 +11,8 @@ import { OAuth2Client } from "google-auth-library";
 import { providerEnum, roleEnum } from "../../common/enum/enum.js";
 import { accessTokenSecret, refreshTokenSecret } from "../../config/env.services.js";
 import cloudinary from "../../common/utils/cloudinary/cloudinary.service.js";
-
+import revokeTokenModel from "../../DB/models/revokeToken.model.js";
+import {randomUUID} from "crypto";
 export const signup = async (req, res, next) => {
   const {
     fristName,
@@ -115,15 +116,20 @@ export const signUpWithGoogle = async (req, res, next) => {
 
       throw new Error("You must login with system", { cause: 400 });
     }
+    const tokenId = randomUUID();
     const accessToken = jwt.sign(
       { id: user._id, email: user.email },
       accessTokenSecret || "access_token_super_secret_key",
-      { expiresIn: "1h" },
+      { expiresIn: "1h",
+        jwtid: tokenId
+       },
     );
     const refreshToken = jwt.sign(
       { id: user._id, email: user.email },
       refreshTokenSecret || "refresh_token_super_secret_key",
-      { expiresIn: "7d" },
+      { expiresIn: "7d",
+        jwtid: tokenId
+       },
     );
     verify().catch(console.error);
     successResponse({
@@ -150,15 +156,20 @@ export const login = async (req, res, next) => {
   if (!isPasswordMatch) {
     throw new Error("Password not match", { cause: 400 });
   }
+  const tokenId = randomUUID();
   const accessToken = jwt.sign(
     { id: user._id, role: user.role },
     accessTokenSecret || "access_token_super_secret_key",
-    { expiresIn: "1h" },
+    { expiresIn: "1h",
+      jwtid: tokenId
+     },
   );
   const refreshToken = jwt.sign(
     { id: user._id, email: user.email },
     refreshTokenSecret || "refresh_token_super_secret_key",
-    { expiresIn: "7d" },
+    { expiresIn: "7d",
+      jwtid: tokenId
+     },
   );
   successResponse({
     res,
@@ -236,4 +247,22 @@ export const updatePassword = async (req, res, next) => {
       message: "Password updated successfully",
       data: { ...updatedUser._doc, phone: decrypt(updatedUser.phone) },
     });
+};
+
+export const logout = async (req, res, next) => {
+  const  flag = req.query.flag;
+  if (flag==="All") {
+      req.userInfo.changeCradentials = new Date();
+      await req.userInfo.save();
+      await db_service.deleteMany({model:revokeTokenModel,filter:{userId:req.decoded.id}});
+  }
+  else{
+   await db_service.create({model:revokeTokenModel,data:{userId:req.decoded.id,tokenId:req.decoded.jti,expirationDate:req.decoded.exp *1000}});
+  }
+  successResponse({
+    res,
+    status: 200,
+    message: "Logout successfully",
+  });
+
 };
