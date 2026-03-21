@@ -8,6 +8,7 @@ export const signupSchema = {
       fristName: generalRules.fristName.required(),
       lastName: generalRules.lastName.required(),
       email: generalRules.email.required(),
+      confirm: joi.boolean().default(false),
       password: generalRules.password
         .valid(joi.ref("confirmPassword"))
         .required(),
@@ -70,6 +71,22 @@ export const updatePasswordSchema = {
     .object({
       newPassword: generalRules.password.required(),
       oldPassword: generalRules.password.required(),
+    })
+    .required(),
+};
+
+export const confirmAccountSchema = {
+  body: joi
+    .object({
+      email: generalRules.email.required(),
+      code: joi.string().regex(/^[0-9]{6}$/).required(),
+    })
+    .required(),
+};
+export const resendConfirmationCodeSchema = {
+  body: joi
+    .object({
+      email: generalRules.email.required(),
     })
     .required(),
 };

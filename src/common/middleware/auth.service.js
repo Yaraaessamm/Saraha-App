@@ -3,6 +3,7 @@ import * as db_service from "../../DB/DB.service.js";
 import userModel from "../../DB/models/user.model.js";
 import { accessTokenSecret, JWT_SECRET } from "../../config/env.sevices.js";
 import revokeTokenModel from "../../DB/models/revokeToken.model.js";
+import { getRedis, revokedKey } from "../../DB/redis/redis.service.js";
 export const authMiddleware = async (req, res, next) => {
   const header = req.headers.authorization;
 
@@ -29,10 +30,8 @@ export const authMiddleware = async (req, res, next) => {
     if (userExist?.changeCradentials?.getTime() > decoded.iat * 1000) {
       throw new Error("Invalid Token", { cause: 401 });
     }
-    const revokeToken = await db_service.findOne({
-      model: revokeTokenModel,
-      filter: { tokenId: decoded.jti },
-    });
+    const revokeToken = await getRedis(revokedKey({userId:userExist._id,jti:decoded.jti}));
+    
     if (revokeToken) {
       throw new Error("Invalid Token revoked", { cause: 401 });
     }

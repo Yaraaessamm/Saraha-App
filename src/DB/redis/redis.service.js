@@ -7,6 +7,18 @@ export const getAllRevokedKeys = ({userId})=>{
   return `revokeToken::${userId}::*`
 }
 
+export const otpKey = ({email})=>{
+  return `otp::${email}`
+}
+
+export const block_otp_key = ({email})=>{
+  return `block_otp::${email}`
+}
+
+export const max_otp_key = ({email})=>{
+  return `max_otp::${email}`
+}
+
 export const setRedis = async ({ key, value, ttl } = {}) => {
   try {
     const data = typeof value === "object" ? JSON.stringify(value) : value;
@@ -51,3 +63,18 @@ export const deleteRedis = async (key) => {
     console.log("fail to delete redis", error);
   }
 }
+export const ttl = async (key) => {
+  try {
+    return await redisClient.ttl(key);
+  } catch (error) {
+    console.log("fail to get ttl redis", error);
+  }
+}
+export const increment = async (key) => {
+  try {
+    return await redisClient.incr(key);
+  } catch (error) {
+    console.log("fail to increment redis", error);
+  }
+}
+
