@@ -7,18 +7,20 @@ export const getAllRevokedKeys = ({userId})=>{
   return `revokeToken::${userId}::*`
 }
 
-export const otpKey = ({email})=>{
-  return `otp::${email}`
+export const otpKey = ({email,subject})=>{
+  return `otp::${email}::${subject}`
 }
 
-export const block_otp_key = ({email})=>{
-  return `block_otp::${email}`
+export const block_otp_key = ({email,subject})=>{
+  return `block_otp::${email}::${subject}`
 }
 
-export const max_otp_key = ({email})=>{
-  return `max_otp::${email}`
+export const max_otp_key = ({email,subject})=>{
+  return `max_otp::${email}::${subject}`
 }
-
+export const OTAL = ({ token,subject }) => {
+  return `token::${token}::OTAL::${subject}`;
+};
 export const setRedis = async ({ key, value, ttl } = {}) => {
   try {
     const data = typeof value === "object" ? JSON.stringify(value) : value;
@@ -77,4 +79,5 @@ export const increment = async (key) => {
     console.log("fail to increment redis", error);
   }
 }
+
 

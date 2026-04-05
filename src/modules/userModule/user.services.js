@@ -8,9 +8,15 @@ import { successResponse } from "../../common/utils/success.response.js";
 import jwt from "jsonwebtoken";
 import { compare, hash } from "../../common/utils/security/hash.security.js";
 import { OAuth2Client } from "google-auth-library";
-import { providerEnum, roleEnum } from "../../common/enum/enum.js";
+import {
+  emailEnum,
+  providerEnum,
+  roleEnum,
+  uploadTypeEnum,
+} from "../../common/enum/enum.js";
 import {
   accessTokenSecret,
+  applicationName,
   refreshTokenSecret,
 } from "../../config/env.sevices.js";
 import cloudinary from "../../common/utils/cloudinary/cloudinary.service.js";
@@ -23,13 +29,84 @@ import {
   getRedis,
   increment,
   max_otp_key,
+  OTAL,
   otpKey,
   revokedKey,
   setRedis,
   ttl,
 } from "../../DB/redis/redis.service.js";
-import { redisClient } from "../../DB/redis/redis.DB.js";
-import { generateOTP, sendEmail } from "../../common/utils/nodemailer/sendEmail.js";
+import { redisClient } from "../../DB/redis/redis.Db.js";
+import {
+  generateOTP,
+  sendEmail,
+} from "../../common/utils/nodemailer/sendEmail.js";
+import { eventEmitter } from "../../common/utils/nodemailer/email.events.js";
+import { eventName } from "../../common/utils/nodemailer/email.enum.js";
+import {
+  uploadFile,
+  uploadFiles,
+} from "../../common/utils/cloudinary/cloudinary.tools.js";
+
+const sendEmailOTP = async ({ email, subject } = {}) => {
+  const bloackedOtp = await ttl(block_otp_key({ email, subject }));
+  if (bloackedOtp > 0) {
+    throw new Error(
+      `you reached the limit of sending otp, you can resend after ${bloackedOtp} seconds`,
+      { cause: 400 },
+    );
+  }
+  const otpTtl = await ttl(otpKey({ email, subject }));
+  if (otpTtl > 0) {
+    throw new Error(`you can resend otp after ${otpTtl} seconds`, {
+      cause: 400,
+    });
+  }
+  const maxOtpsend = await getRedis(max_otp_key({ email, subject }));
+  if (maxOtpsend >= 3) {
+    await setRedis({
+      key: block_otp_key({ email, subject }),
+      value: 1,
+      ttl: 60,
+    });
+    await deleteRedis(max_otp_key({ email, subject }));
+    throw new Error(
+      `you reached the limit of sending otp, you can resend after ${bloackedOtp} seconds`,
+      {
+        cause: 400,
+      },
+    );
+  }
+
+  const otp = generateOTP();
+  eventEmitter.emit(eventName, async () => {
+    await sendEmail({
+      to: email,
+      subject: "OTP",
+      html: `<h1>OTP:${otp}</h1>`,
+    });
+  });
+  const otpHashed = hash({ plainText: otp.toString(), saltRounds: 12 });
+  await setRedis({
+    key: otpKey({ email, subject }),
+    value: otpHashed,
+    ttl: 60 * 2,
+  });
+  await increment(max_otp_key({ email, subject }));
+};
+export const uploadProfilePicture = async (req, res, next) => {
+  if (!req.files.attachment) {
+    throw new Error("Attachment is required", { cause: 400 });
+  }
+  await uploadFile({
+    filePath: req.files.attachment[0].path,
+    folder: `${applicationName}/users/${req.userInfo._id}/profile`,
+  });
+  successResponse({
+    res,
+    status: 200,
+    message: "Profile picture uploaded successfully",
+  });
+};
 export const signup = async (req, res, next) => {
   const { fristName, lastName, email, password, age, gender, phone } = req.body;
   const emailExist = await db_service.findOne({
@@ -40,18 +117,21 @@ export const signup = async (req, res, next) => {
     throw new Error("Email already exist", { cause: 400 });
   }
 
-  const profilePicture = await cloudinary.uploader.upload(
-    req.files.attachment[0].path,
-  );
+  let profilePicture = null;
+  let coverPictures = null;
 
-  const coverPictures = await Promise.all(
-    req.files.attachments.map(async (file) => {
-      const { public_id, secure_url } = await cloudinary.uploader.upload(
-        file.path,
-      );
-      return { public_id, secure_url };
-    }),
-  );
+  if (req.files.attachment) {
+    profilePicture = await uploadFile({
+      filePath: req.files.attachment[0].path,
+      folder: `${applicationName}/users/profile`,
+    });
+  }
+  if (req.files.attachments) {
+    coverPictures = await uploadFiles({
+      files: req.files.attachments,
+      folder: `${applicationName}/users/cover`,
+    });
+  }
 
   const hashedPassword = hash({ plainText: password, saltRounds: 12 });
   const encryptedPhone = encrypt(phone);
@@ -68,8 +148,12 @@ export const signup = async (req, res, next) => {
       phone: encryptedPhone,
       role: roleEnum.user,
       profilePicture: {
-        public_id: profilePicture.public_id,
-        secure_url: profilePicture.secure_url,
+        public_id:
+          profilePicture?.public_id ||
+          "https://res.cloudinary.com/djyjwz8xv/image/upload/v1675000641/image.png",
+        secure_url:
+          profilePicture?.secure_url ||
+          "https://res.cloudinary.com/djyjwz8xv/image/upload/v1675000641/image.png",
       },
       coverPicture: coverPictures,
     },
@@ -79,13 +163,27 @@ export const signup = async (req, res, next) => {
         "fristName lastName email age gender role profilePicture coverPicture",
     },
   });
-  const otp =generateOTP()
-  await sendEmail({to:user.email,subject:"OTP",html:`<h1>OTP:${otp}</h1>`})
+  const otp = generateOTP();
+  eventEmitter.emit(eventName, async () => {
+    await sendEmail({
+      to: email,
+      subject: "OTP",
+      html: `<h1>OTP:${otp}</h1>`,
+    });
+  });
   const otpHashed = hash({ plainText: otp.toString(), saltRounds: 12 });
   console.log(otpHashed);
-  
-  setRedis({ key: otpKey({email}), value: otpHashed , ttl: 60*2 });
-  setRedis({key: max_otp_key({email}),value: 1 ,ttl:60});
+
+  setRedis({
+    key: otpKey({ email, subject: emailEnum.signUpConfirmCode }),
+    value: otpHashed,
+    ttl: 60 * 2,
+  });
+  setRedis({
+    key: max_otp_key({ email, subject: emailEnum.signUpConfirmCode }),
+    value: 1,
+    ttl: 60,
+  });
   successResponse({
     res,
     status: 201,
@@ -95,8 +193,10 @@ export const signup = async (req, res, next) => {
 };
 
 export const confirmAccount = async (req, res, next) => {
-  const {email,code} = req.body;
-  const otpHashed = await getRedis(otpKey({email}));
+  const { email, code } = req.body;
+  const otpHashed = await getRedis(
+    otpKey({ email, subject: emailEnum.signUpConfirmCode }),
+  );
   if (!otpHashed) {
     throw new Error("OTP not found", { cause: 400 });
   }
@@ -106,54 +206,187 @@ export const confirmAccount = async (req, res, next) => {
   }
   const user = await db_service.findOneAndUpdate({
     model: userModel,
-    filter: { email , confirm: {$exists: false} },
+    filter: { email, confirm: { $exists: false } },
     data: { confirm: true },
   });
-  await deleteRedis(otpKey({email}));
+  await deleteRedis(otpKey({ email, subject: emailEnum.signUpConfirmCode }));
   successResponse({
     res,
     status: 200,
     message: "Account confirmed successfully",
     data: user,
   });
-}
+};
 
 export const resendConfirmationCode = async (req, res, next) => {
-  const {email} = req.body;
+  const { email } = req.body;
   const userExist = await db_service.findOne({
     model: userModel,
-    filter: { email , confirm: {$exists: false} },
+    filter: { email, confirm: { $exists: false } },
   });
   if (!userExist) {
     throw new Error("User not found", { cause: 400 });
   }
-  const bloackedOtp = await ttl(block_otp_key({email}));
-  if(bloackedOtp>0){
-    throw new Error(`you reached the limit of sending otp, you can resend after ${bloackedOtp} seconds`, { cause: 400 });
-  }
-  const otpTtl = await ttl(otpKey({email}));
-  if(otpTtl>0){
-    throw new Error(`you can resend otp after ${otpTtl} seconds`, { cause: 400 });
-  }
-  const maxOtpsend = await getRedis(max_otp_key({email}));
-  if(maxOtpsend>=3){
-    await setRedis({key: block_otp_key({email}),value: 1 ,ttl:60});
-    await deleteRedis(max_otp_key({email}));
-    throw new Error(`you can resend otp after ${maxOtpsend} seconds`, { cause: 400 });
-  }
 
-  const otp =generateOTP()
-  await sendEmail({to:userExist.email,subject:"OTP",html:`<h1>OTP:${otp}</h1>`})
-  const otpHashed = hash({ plainText: otp.toString(), saltRounds: 12 });
-  setRedis({ key: otpKey({email}), value: otpHashed , ttl: 60*2 });
-  increment(max_otp_key({email}));
+  await sendEmailOTP({ email, subject: emailEnum.signUpConfirmCode });
   successResponse({
     res,
     status: 200,
     message: "OTP resent successfully",
   });
-}
+};
 
+// one time link to reset password
+
+// #####################################################################################
+export const forgetPasswordUsingOTAL = async (req, res, next) => {
+  const { email } = req.body;
+  const userExist = await db_service.findOne({
+    model: userModel,
+    filter: { email, provider: providerEnum.system },
+  });
+  if (userExist) {
+    const otp = generateOTP();
+    setRedis({
+      key: OTAL({ token: otp, subject: emailEnum.forgetPasswordOTAL }),
+      value: email,
+      ttl: 60 * 15,
+    });
+
+    eventEmitter.emit(eventName, async () => {
+      await sendEmail({
+        to: email,
+        subject: "Password Reset Link",
+        html: `http://localhost:3000/reset-password/${otp}`,
+      });
+    });
+  }
+  successResponse({
+    res,
+    status: 200,
+    message: "If an account exists, a link was sent successfully",
+  });
+};
+export const verifyResetLinkUsingOTAL = async (req, res, next) => {
+  const { token } = req.params;
+
+  const email = await getRedis(
+    OTAL({
+      token: token,
+      subject: emailEnum.forgetPasswordOTAL,
+    }),
+  );
+
+  if (!email) {
+    throw new Error("This reset link is invalid or has expired", {
+      cause: 400,
+    });
+  }
+
+  successResponse({
+    res,
+    status: 200,
+    message: "Link is valid. Please enter your new password.",
+  });
+};
+
+export const resetPasswordUsingOTAL = async (req, res, next) => {
+  const { token } = req.params;
+  const { newPassword } = req.body;
+
+  const redisKey = OTAL({
+    token: token,
+    subject: emailEnum.forgetPasswordOTAL,
+  });
+  const email = await getRedis(redisKey);
+
+  if (!email) {
+    throw new Error("Link is invalid or has expired", { cause: 400 });
+  }
+
+  const newPasswordHashed = hash({ plainText: newPassword, saltRounds: 12 });
+
+  await db_service.findOneAndUpdate({
+    model: userModel,
+    filter: { email },
+    data: { password: newPasswordHashed, changeCradentials: new Date() },
+  });
+
+  await deleteRedis(redisKey);
+
+  successResponse({
+    res,
+    status: 200,
+    message: "Password reset successfully",
+  });
+};
+// #####################################################################################
+export const forgetPassword = async (req, res, next) => {
+  const { email } = req.body;
+  const userExist = await db_service.findOne({
+    model: userModel,
+    filter: { email, provider: providerEnum.system },
+  });
+  if (!userExist) {
+    throw new Error("User not found", { cause: 400 });
+  }
+  const otp = generateOTP();
+  eventEmitter.emit(eventName, async () => {
+    await sendEmail({
+      to: email,
+      subject: "OTP",
+      html: `<h1>OTP:${otp}</h1>`,
+    });
+  });
+  const otpHashed = hash({ plainText: otp.toString(), saltRounds: 12 });
+  setRedis({
+    key: otpKey({ email, subject: emailEnum.forgetPassword }),
+    value: otpHashed,
+    ttl: 60 * 2,
+  });
+  setRedis({
+    key: max_otp_key({ email, subject: emailEnum.forgetPassword }),
+    value: 1,
+    ttl: 60,
+  });
+  successResponse({
+    res,
+    status: 200,
+    message: "OTP sent successfully",
+  });
+};
+
+export const resetPassword = async (req, res, next) => {
+  const { email, code, newPassword } = req.body;
+  const otpHashed = await getRedis(
+    otpKey({ email, subject: emailEnum.forgetPassword }),
+  );
+  if (!otpHashed) {
+    throw new Error("OTP not found", { cause: 400 });
+  }
+  const isOtpMatch = compare({ plainText: code, cipherText: otpHashed });
+  if (!isOtpMatch) {
+    throw new Error("OTP not match", { cause: 400 });
+  }
+  const hashedPassword = hash({ plainText: newPassword, saltRounds: 12 });
+  const user = await db_service.findOneAndUpdate({
+    model: userModel,
+    filter: {
+      email,
+      provider: providerEnum.system,
+      confirm: { $exists: true },
+    },
+    data: { password: hashedPassword, changeCradentials: new Date() },
+    options: { new: true },
+  });
+  await deleteRedis(otpKey({ email, subject: emailEnum.forgetPassword }));
+  successResponse({
+    res,
+    status: 200,
+    message: "Password reset successfully",
+    data: user,
+  });
+};
 export const signUpWithGoogle = async (req, res, next) => {
   let user;
   const idToken = req.body.idToken;
@@ -221,8 +454,13 @@ export const login = async (req, res, next) => {
   const { email, password } = req.body;
   const user = await db_service.findOne({
     model: userModel,
-    filter: { email },
+    filter: {
+      email,
+      provider: providerEnum.system,
+      confirm: { $exists: true },
+    },
   });
+
   if (!user) {
     throw new Error("User not found", { cause: 404 });
   }
@@ -233,6 +471,59 @@ export const login = async (req, res, next) => {
   if (!isPasswordMatch) {
     throw new Error("Password not match", { cause: 400 });
   }
+   const otp = generateOTP();
+   eventEmitter.emit(eventName, async () => {
+     await sendEmail({
+       to: email,
+       subject: "Login Verification OTP",
+       html: `<h1>Login OTP:${otp}</h1>`,
+     });
+   });
+   const otpHashed = hash({ plainText: otp.toString(), saltRounds: 12 });
+   console.log(otpHashed);
+
+   setRedis({
+     key: otpKey({ email, subject: emailEnum.loginOTP }),
+     value: otpHashed,
+     ttl: 60 * 2,
+   });
+   setRedis({
+     key: max_otp_key({ email, subject: emailEnum.loginOTP }),
+     value: 1,
+     ttl: 60,
+   });
+  successResponse({
+    res,
+    status: 200,
+    message: "Login successfully please verify OTP sent to your email",
+  });
+};
+
+export const verifyLoginOTP = async (req, res, next) => {
+  const { email, code } = req.body;
+  const otpHashed = await getRedis(
+    otpKey({ email, subject: emailEnum.loginOTP }),
+  );
+  if (!otpHashed) {
+    throw new Error("OTP not found", { cause: 400 });
+  }
+  const isOtpMatch = compare({ plainText: code, cipherText: otpHashed });
+  if (!isOtpMatch) {
+    throw new Error("OTP not match", { cause: 400 });
+  }
+  const user = await db_service.findOne({
+    model: userModel,
+    filter: {
+      email,
+      provider: providerEnum.system,
+      confirm: { $exists: true },
+    },
+  });
+
+  if (!user) {
+    throw new Error("User not found", { cause: 404 });
+  }
+  await deleteRedis(otpKey({ email, subject: emailEnum.loginOTP }));
   const tokenId = randomUUID();
   const accessToken = jwt.sign(
     { id: user._id, role: user.role },
@@ -247,10 +538,29 @@ export const login = async (req, res, next) => {
   successResponse({
     res,
     status: 200,
-    message: "Login successfully",
+    message: "login confirmed successfully",
     data: { accessToken, refreshToken },
   });
 };
+
+export const resendLoginConfirmationCode = async (req, res, next) => {
+  const { email } = req.body;
+  const userExist = await db_service.findOne({
+    model: userModel,
+    filter: { email, confirm: { $exists: true } },
+  });
+  if (!userExist) {
+    throw new Error("User not found", { cause: 400 });
+  }
+
+  await sendEmailOTP({ email, subject: emailEnum.loginOTP });
+  successResponse({
+    res,
+    status: 200,
+    message: "OTP resent successfully",
+  });
+};
+
 export const refreshToken = async (req, res, next) => {
   const { refreshToken } = req.body;
   if (!refreshToken) {
@@ -276,10 +586,10 @@ export const refreshToken = async (req, res, next) => {
 
 export const getProfile = async (req, res, next) => {
   const profileKey = `profile:${req.decoded.id}`;
-  const dataCashed = await getRedis(profileKey)
-  if (dataCashed){
+  const dataCashed = await getRedis(profileKey);
+  if (dataCashed) {
     console.log("from cash");
-    
+
     return successResponse({
       res,
       status: 200,
@@ -288,8 +598,8 @@ export const getProfile = async (req, res, next) => {
     });
   }
   console.log("from db");
-  
-  await setRedis({ key: profileKey, value: req.userInfo, ttl: 60*2 }); 
+
+  await setRedis({ key: profileKey, value: req.userInfo, ttl: 60 * 2 });
   successResponse({
     res,
     status: 200,
@@ -342,6 +652,8 @@ export const updatePassword = async (req, res, next) => {
     data: { password: hashedPassword },
     options: { new: true },
   });
+  req.userInfo.changeCradentials = new Date();
+  await req.userInfo.save();
   successResponse({
     res,
     status: 200,
@@ -359,7 +671,7 @@ export const logout = async (req, res, next) => {
       getAllRevokedKeys({ userId: req.decoded.id }),
     );
     console.log(keys);
-    
+
     if (keys.length > 0) {
       await deleteRedis(keys);
     }

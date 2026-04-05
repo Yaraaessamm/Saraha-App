@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
-import { db_uri } from "../config/env.services.js";
+import { DB_Atlas_Url} from "../config/env.sevices.js";
 export const connectionDB = async () => {
-  await mongoose.connect(db_uri , {
+  await mongoose.connect(DB_Atlas_Url, {
       serverSelectionTimeoutMS: 3000,
     })
     .then(() => {

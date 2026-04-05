@@ -27,7 +27,7 @@ export const signupSchema = {
       .array()
       .max(1)
       .items(generalRules.file)
-      .required()
+      // .required()
       .messages({
         "any.required": "attachment is required",
       }),
@@ -35,7 +35,7 @@ export const signupSchema = {
       .array()
       .max(3)
       .items(generalRules.file)
-      .required()
+      // .required()
       .messages({
         "any.required": "attachments is required",
       }),
@@ -87,6 +87,46 @@ export const resendConfirmationCodeSchema = {
   body: joi
     .object({
       email: generalRules.email.required(),
+    })
+    .required(),
+};
+
+export const forgetPasswordSchema = {
+  body:joi.object({
+    email: generalRules.email.required(),
+  }).required(),
+}
+export const confirmationResetPasswordSchema = {
+  body: joi.object({
+    email: generalRules.email.required(),
+    code: joi.string().regex(/^[0-9]{6}$/).required(),
+    newPassword: generalRules.password.required(),
+    confirmPassword: generalRules.confirmPassword.valid(joi.ref("newPassword")).required(),
+  }).required(),
+}
+
+export const verifyResetLinkUsingOTALSchema = {
+  params: joi.object({
+    token: joi.string().required(),
+  }).required(),
+}
+export const resetPasswordUsingOTALSchema = {
+  body: joi
+    .object({
+      newPassword: generalRules.password.required(),
+    })
+    .required(),
+  params: joi
+    .object({
+      token: joi.string().required(),
+    })
+    .required(),
+};
+export const loginVerifyUsingOTALSchema = {
+  body: joi
+    .object({
+      email: generalRules.email.required(),
+      code: joi.string().regex(/^[0-9]{6}$/).required(),
     })
     .required(),
 };

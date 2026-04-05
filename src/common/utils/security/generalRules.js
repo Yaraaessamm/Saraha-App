@@ -7,6 +7,7 @@ export const generalRules = {
         const isValid = Types.ObjectId.isValid(value);
         return isValid ? value : helpers.error("any.invalid");
     }),
+    message: joi.string().min(3).max(500),
     email: joi.string().email().trim(),
     password: joi.string()
           .min(6)
